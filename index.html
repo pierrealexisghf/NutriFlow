@@ -197,7 +197,7 @@
 
       <div id="auth-signup-extra" style="display:none;margin-top:12px;">
         <p style="font-size:12px;color:var(--text-muted);text-align:center;line-height:1.5;">
-          En créant un compte vous recevez <strong style="color:var(--accent-green);">20 crédits IA offerts</strong> 🎁<br/>
+          En créant un compte vous recevez <strong style="color:var(--accent-green);">10 crédits IA offerts</strong> 🎁<br/>
           pour tester Frigo Vide, Restaurant et Batch Cooking.
         </p>
       </div>
@@ -2045,7 +2045,7 @@ function renderPlan(plan, allIngredients) {
 
   // Pre-populate print zones
   buildPrintZones(plan, uniqueIngredients);
-  toast(`✅ Plan 7 jours généré avec rotation anti-lassitude !`);
+  toast(`✅ Plan 5 jours généré avec rotation anti-lassitude !`);
 }
 
 function buildPrintZones(plan, ingredients) {
@@ -4508,7 +4508,7 @@ async function loadUserData(user) {
     // Pas de ligne credits — créer avec upsert (évite le doublon)
     const { data: newCredits } = await sb
       .from('credits')
-      .upsert({ user_id: user.id, balance: 20 }, { onConflict: 'user_id' })
+      .upsert({ user_id: user.id, balance: 10 }, { onConflict: 'user_id' })
       .select('balance')
       .single();
     userCredits = newCredits?.balance ?? 20;
