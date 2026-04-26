@@ -1605,17 +1605,35 @@ function markAsConsumed(recipeId) {
   // Add to daily tracking
   const key = todayKey();
   if (!appState.dailyMeals[key]) appState.dailyMeals[key] = [];
-  appState.dailyMeals[key].push({
+  const mealType = isBreakfast ? 'Petit-déjeuner' : 'Repas';
+  const newEntry = {
     id: Date.now(),
     name: recipe.name,
     emoji: recipe.emoji,
     macros: recipe.macros,
-    mealType: isBreakfast ? 'Petit-déjeuner' : 'Repas',
+    mealType,
     mainIngredients: recipe.mainIngredients,
     source: 'recipe',
-  });
+  };
+  appState.dailyMeals[key].push(newEntry);
 
   saveState();
+
+  // Save to Supabase
+  saveMealToSupabase({
+    name: recipe.name,
+    emoji: recipe.emoji,
+    macros: recipe.macros,
+    mealType,
+    mainIngredients: recipe.mainIngredients,
+    source: 'recipe',
+  }).then(supabaseId => {
+    if (supabaseId) {
+      const meal = appState.dailyMeals[key]?.find(m => m.id === newEntry.id);
+      if (meal) meal.supabase_id = supabaseId;
+    }
+  });
+
   toast(`✅ "${recipe.name}" ajouté au suivi du jour`);
   refreshDashboard();
   updateConsumedCount();
