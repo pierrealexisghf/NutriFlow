@@ -2384,21 +2384,7 @@ Réponds EXCLUSIVEMENT avec un objet JSON valide, sans texte avant ni après, sa
 }`;
 
   try {
-    const response = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1200,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-
-    const raw = data.content.map(b => b.text || '').join('').trim();
-    // Strip potential markdown fences
+    const raw = await callAI(prompt, 1200);
     const clean = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     const recipe = JSON.parse(clean);
     renderFridgeRecipe(recipe, ingredients);
@@ -2688,26 +2674,7 @@ Réponds EXCLUSIVEMENT avec un objet JSON valide, sans texte avant ni après, sa
 }`;
 
   try {
-    const response = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1400,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: restoMediaType, data: restoPhotoBase64 } },
-            { type: 'text',  text: prompt }
-          ]
-        }]
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-
-    const raw   = data.content.map(b => b.text || '').join('').trim();
+    const raw = await callAIWithImage(prompt, restoPhotoBase64, restoMediaType, 1400);
     const clean = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     const result = JSON.parse(clean);
     renderRestoAnalysis(result);
@@ -3009,18 +2976,7 @@ Choisis ${count} recettes aux ingrédients communs. JSON uniquement, pas de mark
 {"session_title":"Titre court","total_time":90,"total_recipes":${count},"kcal_prepared":2800,"portions_per_recipe":2,"selected_recipes":[{"id":1,"name":"Nom","assigned_day":"Lun/Mar","macros":{"kcal":480,"prot":38,"gluc":42,"lip":14},"why_selected":"Courte raison"}],"shared_ingredients":[{"ingredient":"Nom","used_in":["R1","R2"],"quantity_total":"500g"}],"roadmap":[{"step":1,"time_start":"14h00","duration_min":10,"type":"prep","action":"Action précise","parallel_note":null},{"step":2,"time_start":"14h10","duration_min":20,"type":"cook","action":"Action précise","parallel_note":"Pendant ce temps: étape 3"}],"tips":["Conseil 1","Conseil 2"],"storage":"4 jours frigo, 3 mois congélateur"}`;
 
   try {
-    const response = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1800,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-    const raw = data.content.map(b => b.text || '').join('').trim();
+    const raw = await callAI(prompt, 1800);
     const clean = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     const result = JSON.parse(clean);
     renderBatchCooking(result);
@@ -4605,33 +4561,46 @@ async function deleteSportFromSupabase(supabaseId) {
 }
 
 // ── Wrap AI calls with credit check ─────────────────────────
-const _origCallAI = callAI;
-const _origCallAIWithImage = callAIWithImage;
-
+// ── Wrapper IA centralisé ─────────────────────────────────────
 let _aiCallInProgress = false;
 
-async function callAI(prompt, maxTokens = 1200) {
-  if (_aiCallInProgress) { toast('⚠️ Une analyse est déjà en cours…'); throw new Error('Appel IA déjà en cours'); }
+async function _guardedAICall(fn) {
+  if (_aiCallInProgress) {
+    toast('⚠️ Une analyse est déjà en cours…');
+    throw new Error('Appel IA déjà en cours');
+  }
   _aiCallInProgress = true;
   try {
     const ok = await debitCredit();
     if (!ok) throw new Error('Crédits insuffisants');
-    return await _origCallAI(prompt, maxTokens);
+    return await fn();
   } finally {
     _aiCallInProgress = false;
   }
 }
 
+const _rawCallAI = callAI;
+const _rawCallAIWithImage = callAIWithImage;
+
+async function callAI(prompt, maxTokens = 1200) {
+  return _guardedAICall(() => _rawCallAI(prompt, maxTokens));
+}
+
 async function callAIWithImage(prompt, b64, mime, maxTokens = 1200) {
-  if (_aiCallInProgress) { toast('⚠️ Une analyse est déjà en cours…'); throw new Error('Appel IA déjà en cours'); }
-  _aiCallInProgress = true;
-  try {
-    const ok = await debitCredit();
-    if (!ok) throw new Error('Crédits insuffisants');
-    return await _origCallAIWithImage(prompt, b64, mime, maxTokens);
-  } finally {
-    _aiCallInProgress = false;
-  }
+  return _guardedAICall(() => _rawCallAIWithImage(prompt, b64, mime, maxTokens));
+}
+
+async function callAIDirect(messages, maxTokens = 1200) {
+  return _guardedAICall(async () => {
+    const response = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.content.map(b => b.text || '').join('').trim();
+  });
 }
 
 // ── Auth state listener ──────────────────────────────────────
