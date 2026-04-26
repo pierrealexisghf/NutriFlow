@@ -4332,7 +4332,13 @@ function updateCreditsDisplay() {
 async function debitCredit() {
   if (!currentUser) return true;
   // Always read fresh balance from Supabase
-  const { data } = await sb.from('credits').select('balance').eq('user_id', currentUser.id).single();
+  const { data, error: fetchError } = await sb.from('credits').select('balance').eq('user_id', currentUser.id).single();
+  if (fetchError) {
+    // Token probablement expiré - forcer reconnexion
+    toast('⚠️ Session expirée, veuillez vous reconnecter.');
+    await sb.auth.signOut();
+    return false;
+  }
   const currentBalance = data?.balance ?? 0;
   if (currentBalance <= 0) {
     toast('❌ Plus de crédits IA ! Rechargez dans l\'onglet Crédits.');
@@ -4343,10 +4349,13 @@ async function debitCredit() {
   const { error } = await sb.from('credits')
     .update({ balance: newBalance, updated_at: new Date().toISOString() })
     .eq('user_id', currentUser.id);
-  if (!error) {
-    userCredits = newBalance;
-    updateCreditsDisplay();
+  if (error) {
+    toast('⚠️ Session expirée, veuillez vous reconnecter.');
+    await sb.auth.signOut();
+    return false;
   }
+  userCredits = newBalance;
+  updateCreditsDisplay();
   return true;
 }
 
