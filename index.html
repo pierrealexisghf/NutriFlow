@@ -1545,11 +1545,11 @@ function addToDailyLog(entry) {
 }
 
 function removeFromDailyLog(mealId) {
-  mealId = Number(mealId);
+  mealId = String(mealId);
   const key = todayKey();
   if (appState.dailyMeals[key]) {
-    const meal = appState.dailyMeals[key].find(m => m.id === mealId);
-    appState.dailyMeals[key] = appState.dailyMeals[key].filter(m => m.id !== mealId);
+    const meal = appState.dailyMeals[key].find(m => String(m.id) === mealId);
+    appState.dailyMeals[key] = appState.dailyMeals[key].filter(m => String(m.id) !== mealId);
     if (meal) {
       // Remove from consumedMeals
       const todayStr = todayKey();
@@ -3228,7 +3228,7 @@ function refreshTracker() {
               <div class="text-xs" style="color:var(--text-muted);">${m.mealType} · ${m.macros?.kcal||0}kcal · P:${m.macros?.prot||0}g</div>
             </div>
           </div>
-          <button onclick="removeFromDailyLog(${m.id})" class="btn-danger text-xs py-1 px-2">✕</button>
+          <button onclick="removeFromDailyLog('${m.id}')" class="btn-danger text-xs py-1 px-2">✕</button>
         </div>
       `).join('');
     }
@@ -3363,17 +3363,17 @@ function refreshWeekTracker() {
             <div class="text-xs" style="color:var(--text-muted);">${m.dayLabel} · ${m.mealType} · ${m.macros?.kcal||0}kcal · P:${m.macros?.prot||0}g</div>
           </div>
         </div>
-        <button onclick="removeMealFromDay('${m.dk}', ${m.id}); refreshWeekTracker();" class="btn-danger text-xs py-1 px-2">✕</button>
+        <button onclick="removeMealFromDay('${m.dk}', '${m.id}'); refreshWeekTracker();" class="btn-danger text-xs py-1 px-2">✕</button>
       </div>`).join('');
   }, 50);
 }
 
 function removeMealFromDay(dayKey, id) {
-  id = Number(id);
+  id = String(id);
   if (!appState.dailyMeals[dayKey]) return;
-  const meal = appState.dailyMeals[dayKey].find(m => m.id === id);
+  const meal = appState.dailyMeals[dayKey].find(m => String(m.id) === id);
   if (meal?.supabase_id) deleteMealFromSupabase(meal.supabase_id);
-  appState.dailyMeals[dayKey] = appState.dailyMeals[dayKey].filter(m => m.id !== id);
+  appState.dailyMeals[dayKey] = appState.dailyMeals[dayKey].filter(m => String(m.id) !== id);
   saveState();
   refreshDashboard();
   toast('✅ Repas supprimé');
@@ -3811,12 +3811,12 @@ function confirmSportActivity() {
 }
 
 function removeSportActivity(id) {
-  id = Number(id);
+  id = String(id);
   const key = todayKey();
   if (appState.dailySport[key]) {
-    const activity = appState.dailySport[key].find(a => a.id === id);
+    const activity = appState.dailySport[key].find(a => String(a.id) === id);
     if (activity?.supabase_id) deleteSportFromSupabase(activity.supabase_id);
-    appState.dailySport[key] = appState.dailySport[key].filter(a => a.id !== id);
+    appState.dailySport[key] = appState.dailySport[key].filter(a => String(a.id) !== id);
     saveState();
     refreshSportHistory();
     refreshDashboard();
@@ -3835,7 +3835,7 @@ function refreshSportHistory() {
       var total = activities.reduce(function(s,a){return s+a.kcalBurned;},0);
       var html = '<div class="text-xs mb-2 font-semibold" style="color:var(--text-muted);">Total : <span style="color:var(--accent-rose);">' + total + ' kcal br\u00fcl\u00e9es</span></div>';
       activities.forEach(function(a) {
-        html += '<div class="history-item"><div class="flex items-center gap-2"><span style="font-size:1.2rem;">' + (a.emoji||'🏃') + '</span><div><div class="text-sm font-semibold">' + a.name + '</div><div class="text-xs" style="color:var(--text-muted);">' + (a.time||'') + ' \u00b7 ' + a.duration + 'min \u00b7 ' + a.intensity + '</div></div></div><div class="flex items-center gap-2"><span class="font-semibold text-sm" style="color:var(--accent-rose);">-' + a.kcalBurned + ' kcal</span><button onclick="removeSportActivity(' + a.id + ')" class="btn-danger text-xs py-1 px-2">\u2715</button></div></div>';
+        html += '<div class="history-item"><div class="flex items-center gap-2"><span style="font-size:1.2rem;">' + (a.emoji||'🏃') + '</span><div><div class="text-sm font-semibold">' + a.name + '</div><div class="text-xs" style="color:var(--text-muted);">' + (a.time||'') + ' \u00b7 ' + a.duration + 'min \u00b7 ' + a.intensity + '</div></div></div><div class="flex items-center gap-2"><span class="font-semibold text-sm" style="color:var(--accent-rose);">-' + a.kcalBurned + ' kcal</span><button onclick="removeSportActivity(\'' + a.id + '\')" class="btn-danger text-xs py-1 px-2">\u2715</button></div></div>';
       });
       container.innerHTML = html;
     }
@@ -3864,17 +3864,17 @@ function refreshSportHistory() {
   }
   var whtml='';
   weekEntries.forEach(function(a) {
-    whtml += '<div class="history-item"><div class="flex items-center gap-2"><span style="font-size:1.1rem;">'+(a.emoji||'🏃')+'</span><div><div class="text-sm font-semibold">'+a.name+'</div><div class="text-xs" style="color:var(--text-muted);">'+a.dayLabel+' \u00b7 '+a.duration+'min \u00b7 '+a.intensity+'</div></div></div><div class="flex items-center gap-2"><span class="font-semibold text-sm" style="color:var(--accent-rose);">-'+a.kcalBurned+' kcal</span><button onclick="removeSportActivityByDay(\''+a.dk+'\','+a.id+')" class="btn-danger text-xs py-1 px-2">\u2715</button></div></div>';
+    whtml += '<div class="history-item"><div class="flex items-center gap-2"><span style="font-size:1.1rem;">'+(a.emoji||'🏃')+'</span><div><div class="text-sm font-semibold">'+a.name+'</div><div class="text-xs" style="color:var(--text-muted);">'+a.dayLabel+' \u00b7 '+a.duration+'min \u00b7 '+a.intensity+'</div></div></div><div class="flex items-center gap-2"><span class="font-semibold text-sm" style="color:var(--accent-rose);">-'+a.kcalBurned+' kcal</span><button onclick="removeSportActivityByDay(\''+a.dk+'\',\''+a.id+'\')" class="btn-danger text-xs py-1 px-2">\u2715</button></div></div>';
   });
   weekEl.innerHTML = whtml;
 }
 
 function removeSportActivityByDay(dayKey, id) {
-  id = Number(id);
+  id = String(id);
   if (!appState.dailySport[dayKey]) return;
-  const activity = appState.dailySport[dayKey].find(a => a.id === id);
+  const activity = appState.dailySport[dayKey].find(a => String(a.id) === id);
   if (activity?.supabase_id) deleteSportFromSupabase(activity.supabase_id);
-  appState.dailySport[dayKey] = appState.dailySport[dayKey].filter(function(a){return a.id!==id;});
+  appState.dailySport[dayKey] = appState.dailySport[dayKey].filter(function(a){return String(a.id)!==id;});
   saveState(); refreshSportHistory(); refreshDashboard();
   toast('Activit\u00e9 supprim\u00e9e');
 }
