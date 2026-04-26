@@ -4608,16 +4608,30 @@ async function deleteSportFromSupabase(supabaseId) {
 const _origCallAI = callAI;
 const _origCallAIWithImage = callAIWithImage;
 
+let _aiCallInProgress = false;
+
 async function callAI(prompt, maxTokens = 1200) {
-  const ok = await debitCredit();
-  if (!ok) throw new Error('Crédits insuffisants');
-  return _origCallAI(prompt, maxTokens);
+  if (_aiCallInProgress) { toast('⚠️ Une analyse est déjà en cours…'); throw new Error('Appel IA déjà en cours'); }
+  _aiCallInProgress = true;
+  try {
+    const ok = await debitCredit();
+    if (!ok) throw new Error('Crédits insuffisants');
+    return await _origCallAI(prompt, maxTokens);
+  } finally {
+    _aiCallInProgress = false;
+  }
 }
 
 async function callAIWithImage(prompt, b64, mime, maxTokens = 1200) {
-  const ok = await debitCredit();
-  if (!ok) throw new Error('Crédits insuffisants');
-  return _origCallAIWithImage(prompt, b64, mime, maxTokens);
+  if (_aiCallInProgress) { toast('⚠️ Une analyse est déjà en cours…'); throw new Error('Appel IA déjà en cours'); }
+  _aiCallInProgress = true;
+  try {
+    const ok = await debitCredit();
+    if (!ok) throw new Error('Crédits insuffisants');
+    return await _origCallAIWithImage(prompt, b64, mime, maxTokens);
+  } finally {
+    _aiCallInProgress = false;
+  }
 }
 
 // ── Auth state listener ──────────────────────────────────────
