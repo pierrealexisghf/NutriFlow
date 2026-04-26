@@ -1,0 +1,17 @@
+{
+  "name": "NutriFlow — Coach Nutrition IA",
+  "short_name": "NutriFlow",
+  "description": "Votre coach nutrition personnalisé avec IA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fb",
+  "theme_color": "#16a34a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%2316a34a'/><text y='130' x='50' font-size='100'>🥗</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
