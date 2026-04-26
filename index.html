@@ -1545,6 +1545,7 @@ function addToDailyLog(entry) {
 }
 
 function removeFromDailyLog(mealId) {
+  mealId = Number(mealId);
   const key = todayKey();
   if (appState.dailyMeals[key]) {
     const meal = appState.dailyMeals[key].find(m => m.id === mealId);
@@ -3368,7 +3369,10 @@ function refreshWeekTracker() {
 }
 
 function removeMealFromDay(dayKey, id) {
+  id = Number(id);
   if (!appState.dailyMeals[dayKey]) return;
+  const meal = appState.dailyMeals[dayKey].find(m => m.id === id);
+  if (meal?.supabase_id) deleteMealFromSupabase(meal.supabase_id);
   appState.dailyMeals[dayKey] = appState.dailyMeals[dayKey].filter(m => m.id !== id);
   saveState();
   refreshDashboard();
@@ -3807,8 +3811,11 @@ function confirmSportActivity() {
 }
 
 function removeSportActivity(id) {
+  id = Number(id);
   const key = todayKey();
   if (appState.dailySport[key]) {
+    const activity = appState.dailySport[key].find(a => a.id === id);
+    if (activity?.supabase_id) deleteSportFromSupabase(activity.supabase_id);
     appState.dailySport[key] = appState.dailySport[key].filter(a => a.id !== id);
     saveState();
     refreshSportHistory();
@@ -3863,7 +3870,10 @@ function refreshSportHistory() {
 }
 
 function removeSportActivityByDay(dayKey, id) {
+  id = Number(id);
   if (!appState.dailySport[dayKey]) return;
+  const activity = appState.dailySport[dayKey].find(a => a.id === id);
+  if (activity?.supabase_id) deleteSportFromSupabase(activity.supabase_id);
   appState.dailySport[dayKey] = appState.dailySport[dayKey].filter(function(a){return a.id!==id;});
   saveState(); refreshSportHistory(); refreshDashboard();
   toast('Activit\u00e9 supprim\u00e9e');
