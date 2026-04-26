@@ -8,9 +8,10 @@
 <meta name="apple-mobile-web-app-title" content="NutriFlow"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#16a34a"/>
+<link rel="manifest" href="/manifest.json"/>
 <title>NutriFlow — Coach Nutrition IA</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
 <style>
   :root {
@@ -4124,7 +4125,31 @@ document.getElementById('recipe-modal').addEventListener('click', function(e) {
 const SUPABASE_URL = 'https://yqvyguyxjnktajbnmavw.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxdnlndXl4am5rdGFqYm5tYXZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNDAwODksImV4cCI6MjA5MjcxNjA4OX0.oZZhKxkxRg8pAQpiKvIBzGE2YPm4GHT486X0WkPxMrI';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  }
+});
+
+// Helper pour lire la session directement depuis localStorage
+// Contourne le bug de getSession() qui reste pending
+async function getSessionDirect() {
+  try {
+    const raw = localStorage.getItem('sb-yqvyguyxjnktajbnmavw-auth-token');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.access_token) return null;
+    // Vérifier si le token n'est pas expiré
+    if (parsed.expires_at && parsed.expires_at < Date.now() / 1000) {
+      // Token expiré - essayer de le rafraîchir
+      const { data } = await sb.auth.refreshSession({ refresh_token: parsed.refresh_token });
+      return data?.session;
+    }
+    return { access_token: parsed.access_token, user: parsed.user || null };
+  } catch(e) { return null; }
+}
 
 let currentUser = null;
 let userCredits = 0;
@@ -4579,16 +4604,22 @@ sb.auth.onAuthStateChange(async (event, session) => {
 //  INIT — recharge TOUT depuis Supabase à chaque ouverture
 // ═══════════════════════════════════════════════════════════
 (async () => {
-  try {
-    // Refresh the session token first (crucial for iOS)
-    await sb.auth.refreshSession();
-  } catch(e) {}
-
-  const { data: { session } } = await sb.auth.getSession();
-  if (session?.user) {
-    isLoadingUserData = true;
-    await loadUserData(session.user);
-    isLoadingUserData = false;
+  // Lire la session directement depuis localStorage (contourne le bug pending)
+  const session = await getSessionDirect();
+  if (session?.user || session?.access_token) {
+    // Récupérer l'utilisateur complet
+    let user = session.user;
+    if (!user) {
+      const { data } = await sb.auth.getUser(session.access_token);
+      user = data?.user;
+    }
+    if (user) {
+      isLoadingUserData = true;
+      await loadUserData(user);
+      isLoadingUserData = false;
+    } else {
+      document.getElementById('auth-screen').style.display = 'flex';
+    }
   } else {
     document.getElementById('auth-screen').style.display = 'flex';
   }
@@ -4608,22 +4639,29 @@ sb.auth.onAuthStateChange(async (event, session) => {
 // visibilitychange : recharge depuis Supabase sans condition
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && !isLoadingUserData) {
-    try {
-      await sb.auth.refreshSession();
-    } catch(e) {}
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.user) {
-      isLoadingUserData = true;
-      currentUser = null;
-      await loadUserData(session.user);
-      isLoadingUserData = false;
+    const session = await getSessionDirect();
+    if (session?.user || session?.access_token) {
+      let user = session.user;
+      if (!user) {
+        const { data } = await sb.auth.getUser(session.access_token);
+        user = data?.user;
+      }
+      if (user) {
+        isLoadingUserData = true;
+        currentUser = null;
+        await loadUserData(user);
+        isLoadingUserData = false;
+      }
     } else {
       await handleLogout();
     }
   }
 });
 
-// Service Worker disabled
+// Service Worker minimal
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
