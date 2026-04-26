@@ -3518,7 +3518,7 @@ function loadingHTML(msg) {
 function errorHTML(msg) {
   return `<div class="card p-8 text-center" style="border-color:#fecdd3;"><div class="text-4xl mb-3">⚠️</div><div class="font-semibold mb-2" style="color:var(--accent-rose);">Erreur</div><div class="text-sm" style="color:var(--text-muted);">${msg}</div></div>`;
 }
-async function callAI(prompt, maxTokens = 1200) {
+async function _baseCallAI(prompt, maxTokens = 1200) {
   const response = await fetch('/api/claude', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages:[{role:'user',content:prompt}] })
@@ -3527,7 +3527,7 @@ async function callAI(prompt, maxTokens = 1200) {
   if (data.error) throw new Error(data.error.message);
   return data.content.map(b => b.text||'').join('').trim();
 }
-async function callAIWithImage(prompt, b64, mime, maxTokens = 1200) {
+async function _baseCallAIWithImage(prompt, b64, mime, maxTokens = 1200) {
   const response = await fetch('/api/claude', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages:[{role:'user',content:[
@@ -4560,47 +4560,17 @@ async function deleteSportFromSupabase(supabaseId) {
   } catch(e) {}
 }
 
-// ── Wrap AI calls with credit check ─────────────────────────
-// ── Wrapper IA centralisé ─────────────────────────────────────
-let _aiCallInProgress = false;
-
-async function _guardedAICall(fn) {
-  if (_aiCallInProgress) {
-    toast('⚠️ Une analyse est déjà en cours…');
-    throw new Error('Appel IA déjà en cours');
-  }
-  _aiCallInProgress = true;
-  try {
-    const ok = await debitCredit();
-    if (!ok) throw new Error('Crédits insuffisants');
-    return await fn();
-  } finally {
-    _aiCallInProgress = false;
-  }
-}
-
-const _rawCallAI = callAI;
-const _rawCallAIWithImage = callAIWithImage;
-
+// ── Wrapper IA centralisé — sans verrou global ───────────────
 async function callAI(prompt, maxTokens = 1200) {
-  return _guardedAICall(() => _rawCallAI(prompt, maxTokens));
+  const ok = await debitCredit();
+  if (!ok) throw new Error('Crédits insuffisants');
+  return await _baseCallAI(prompt, maxTokens);
 }
 
 async function callAIWithImage(prompt, b64, mime, maxTokens = 1200) {
-  return _guardedAICall(() => _rawCallAIWithImage(prompt, b64, mime, maxTokens));
-}
-
-async function callAIDirect(messages, maxTokens = 1200) {
-  return _guardedAICall(async () => {
-    const response = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages })
-    });
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.content.map(b => b.text || '').join('').trim();
-  });
+  const ok = await debitCredit();
+  if (!ok) throw new Error('Crédits insuffisants');
+  return await _baseCallAIWithImage(prompt, b64, mime, maxTokens);
 }
 
 // ── Auth state listener ──────────────────────────────────────
