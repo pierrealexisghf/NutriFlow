@@ -3626,6 +3626,7 @@ function addManualSportEntry() {
   if (!appState.dailySport[key]) appState.dailySport[key] = [];
   appState.dailySport[key].push(entry);
   saveState();
+  saveSportToSupabase(entry);
   refreshSportHistory();
   refreshDashboard();
 
