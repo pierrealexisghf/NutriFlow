@@ -1522,7 +1522,6 @@ function saveState() {
 
 function loadState() {
   // Tout est chargé depuis Supabase via loadUserData
-  loadWaterFromStorage();
   cleanOldData();
 }
 
@@ -4610,6 +4609,9 @@ async function loadUserData(user) {
   }
   updateCreditsDisplay();
 
+  // 8. Load hydration (last 7 days)
+  await loadWaterFromSupabase();
+
   cleanOldData();
   refreshDashboard();
   updateConsumedCount();
@@ -4698,56 +4700,73 @@ function getTodayWater() {
   return appState.dailyWater[todayKey()] || 0;
 }
 
-function addWaterQuick(ml) {
+async function addWaterQuick(ml) {
   const key = todayKey();
   appState.dailyWater[key] = (appState.dailyWater[key] || 0) + ml;
-  saveWaterToStorage();
   refreshWaterDisplay();
   toast(`💧 +${ml} ml ajoutés !`);
+  await saveWaterToSupabase(key);
 }
 
-function addWaterManual() {
+async function addWaterManual() {
   const val = parseInt(document.getElementById('water-manual-input').value);
   if (!val || val <= 0) { toast('⚠️ Entrez une quantité valide'); return; }
   const key = todayKey();
   appState.dailyWater[key] = (appState.dailyWater[key] || 0) + val;
   document.getElementById('water-manual-input').value = '';
-  saveWaterToStorage();
   refreshWaterDisplay();
   toast(`💧 +${val} ml ajoutés !`);
+  await saveWaterToSupabase(key);
 }
 
-function resetWaterToday() {
-  appState.dailyWater[todayKey()] = 0;
-  saveWaterToStorage();
+async function resetWaterToday() {
+  const key = todayKey();
+  appState.dailyWater[key] = 0;
   refreshWaterDisplay();
   toast('🗑️ Hydratation réinitialisée');
+  await saveWaterToSupabase(key);
 }
 
-function updateWaterGoal() {
+async function updateWaterGoal() {
   const val = parseInt(document.getElementById('water-goal-input').value);
   if (!val || val < 500) return;
   appState.waterGoal = val;
-  saveWaterToStorage();
   refreshWaterDisplay();
+  await saveWaterToSupabase(todayKey());
 }
 
-function saveWaterToStorage() {
+async function saveWaterToSupabase(date) {
+  if (!currentUser) return;
+  const ml = appState.dailyWater[date] || 0;
+  const goal = appState.waterGoal || 2000;
   try {
-    localStorage.setItem('nutriflow_water', JSON.stringify({
-      dailyWater: appState.dailyWater,
-      waterGoal: appState.waterGoal
-    }));
-  } catch(e) {}
+    await sb.from('hydration').upsert({
+      user_id: currentUser.id,
+      date,
+      ml,
+      goal,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,date' });
+  } catch(e) { console.log('Water save error:', e); }
 }
 
-function loadWaterFromStorage() {
+async function loadWaterFromSupabase() {
+  if (!currentUser) return;
   try {
-    const saved = localStorage.getItem('nutriflow_water');
-    if (saved) {
-      const data = JSON.parse(saved);
-      appState.dailyWater = data.dailyWater || {};
-      appState.waterGoal = data.waterGoal || 2000;
+    // Charger les 7 derniers jours
+    const since = new Date(); since.setDate(since.getDate() - 6);
+    const sinceStr = since.toISOString().slice(0, 10);
+    const { data, error } = await sb.from('hydration')
+      .select('date, ml, goal')
+      .eq('user_id', currentUser.id)
+      .gte('date', sinceStr);
+    if (error) return;
+    if (data && data.length > 0) {
+      data.forEach(row => {
+        appState.dailyWater[row.date] = row.ml;
+        // Utiliser le dernier goal connu
+        appState.waterGoal = row.goal;
+      });
     }
   } catch(e) {}
 }
@@ -4814,7 +4833,8 @@ function refreshWaterDisplay() {
   }
 }
 
-function initWaterPage() {
+async function initWaterPage() {
+  await loadWaterFromSupabase();
   refreshWaterDisplay();
   const dateEl = document.getElementById('water-date');
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
