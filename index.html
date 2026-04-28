@@ -368,9 +368,9 @@
           </div>
           <div class="grid grid-cols-3 gap-4 mb-4">
             <div class="text-center p-3 rounded-12" style="background:var(--accent-teal-light); border-radius:12px;">
-              <div class="text-xs mb-1" style="color:var(--text-muted);">Objectif de base</div>
+              <div class="text-xs mb-1" style="color:var(--text-muted);">Objectif du jour</div>
               <div id="dash-tdee-val" class="font-display text-2xl font-bold" style="color:var(--accent-teal);">—</div>
-              <div class="text-xs mt-1" style="color:var(--text-dim);">kcal/jour</div>
+              <div class="text-xs mt-1" style="color:var(--text-dim);" id="dash-tdee-label">base + sport</div>
             </div>
             <div class="text-center p-3 rounded-12" style="background:var(--accent-rose-light); border-radius:12px;">
               <div class="text-xs mb-1" style="color:var(--text-muted);">Consommées</div>
@@ -499,14 +499,13 @@
                 </div>
               </div>
               <div>
-                <label class="block text-xs mb-1" style="color:var(--text-muted);">Niveau d'activité</label>
+                <label class="block text-xs mb-1" style="color:var(--text-muted);">Niveau d'activité quotidienne <span style="font-weight:400;">(hors sport)</span></label>
                 <select id="prof-activity">
-                  <option value="1.2">Sédentaire (bureau, peu d'exercice)</option>
-                  <option value="1.375">Légèrement actif (1-3j/sem)</option>
-                  <option value="1.55" selected>Modérément actif (3-5j/sem)</option>
-                  <option value="1.725">Très actif (6-7j/sem)</option>
-                  <option value="1.9">Extrêmement actif (sport intensif)</option>
+                  <option value="1.2">Sédentaire (bureau, peu de déplacements)</option>
+                  <option value="1.375">Légèrement actif (debout, déplacements fréquents)</option>
+                  <option value="1.55">Actif (travail physique, livreur, etc.)</option>
                 </select>
+                <p style="font-size:11px; color:var(--text-muted); margin-top:6px;">⚡ Votre sport est comptabilisé automatiquement via le module Activité Sportive — ne l'incluez pas ici.</p>
               </div>
               <div>
                 <label class="block text-xs mb-1" style="color:var(--text-muted);">Objectif</label>
@@ -1779,20 +1778,20 @@ function calculateProfile() {
 
   if (!weight || !height || !age) { toast('⚠️ Remplissez tous les champs'); return; }
 
-  // Harris-Benedict
+  // Harris-Benedict — activité de vie quotidienne uniquement (sans sport)
   let bmr;
   if (gender === 'male') {
     bmr = 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age;
   } else {
     bmr = 447.593 + 9.247 * weight + 3.098 * height - 4.330 * age;
   }
-  const tdee = Math.round(bmr * activity);
+  const tdee = Math.round(bmr * activity); // TDEE de base sans sport
 
   let kcal, modifier;
   if (goal === 'seche') { modifier = -400; }
   else if (goal === 'masse') { modifier = +300; }
   else { modifier = 0; }
-  kcal = tdee + modifier;
+  kcal = tdee + modifier; // Objectif calorique de base (sport s'ajoutera dynamiquement)
 
   // Macros
   const prot = Math.round(weight * 2.2);
@@ -1801,7 +1800,7 @@ function calculateProfile() {
 
   appState.profile = { weight, height, age, gender, activity, goal, kcal, tdee, prot, lip, gluc };
   saveState();
-  saveProfileToSupabase(appState.profile); // sync to Supabase
+  saveProfileToSupabase(appState.profile);
 
   renderProfileResults(appState.profile);
   updateSidebarProfile();
@@ -1847,9 +1846,10 @@ function renderProfileResults(p) {
       </div>
     </div>
     <div class="text-xs p-3 rounded-10" style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;color:var(--text-muted);">
-      <strong style="color:var(--text-primary);">TDEE de base :</strong> ${p.tdee} kcal/jour<br/>
+      <strong style="color:var(--text-primary);">TDEE de base (hors sport) :</strong> ${p.tdee} kcal/jour<br/>
+      <strong style="color:var(--text-primary);">Objectif calorique :</strong> ${p.kcal} kcal/jour (sport non inclus)<br/>
       <strong style="color:var(--text-primary);">Protéines :</strong> ${p.prot}g = ${(p.prot*4)} kcal (${Math.round(p.prot*4/p.kcal*100)}%)<br/>
-      Basé sur le protocole Harris-Benedict révisé
+      💡 Les calories brûlées par le sport s'ajoutent automatiquement à votre objectif quotidien.
     </div>
   `;
 }
@@ -1877,10 +1877,12 @@ function refreshDashboard() {
     const consumed = getTodayConsumedKcal();
     const burned   = getTodayBurnedKcal();
     const net      = consumed - burned;
-    const target   = p.kcal;
-    const diff     = target - net; // positif = encore de la marge, négatif = dépassé
+    const target   = p.kcal + burned; // Objectif de base + calories brûlées par le sport du jour
+    const diff     = target - net;
 
     document.getElementById('dash-tdee-val').textContent = target;
+    const tdeeLabel = document.getElementById('dash-tdee-label');
+    if (tdeeLabel) tdeeLabel.textContent = burned > 0 ? `${p.kcal} + ${burned} sport` : 'base (sans sport)';
     document.getElementById('dash-consumed-kcal').textContent = consumed;
     document.getElementById('dash-burned-kcal').textContent = burned;
 
@@ -3321,8 +3323,9 @@ function refreshTracker() {
 function refreshWeekTracker() {
   const wData = getWeekData();
   const p = appState.profile;
+  const weeklyBaseKcal = p ? p.kcal * 7 : 14000;
   const targets = p
-    ? { kcal: p.kcal * 7, prot: p.prot * 7, gluc: p.gluc * 7, lip: p.lip * 7 }
+    ? { kcal: weeklyBaseKcal + wData.burned, prot: p.prot * 7, gluc: p.gluc * 7, lip: p.lip * 7 }
     : { kcal: 14000, prot: 1050, gluc: 1540, lip: 385 };
 
   // Label semaine Lun XX → Dim XX
@@ -3387,7 +3390,7 @@ function refreshWeekTracker() {
         <div class="font-display text-3xl font-bold mb-1" style="color:${netKcal > targets.kcal ? 'var(--accent-rose)' : 'var(--accent-green)'};">
           ${netKcal.toLocaleString('fr')} kcal
         </div>
-        <div class="text-sm" style="color:var(--text-muted);">mangées − sport · objectif : ${targets.kcal.toLocaleString('fr')} kcal</div>
+        <div class="text-sm" style="color:var(--text-muted);">mangées − sport · objectif ajusté : ${targets.kcal.toLocaleString('fr')} kcal</div>
         <div class="text-xs mt-2 font-semibold" style="color:${netKcal <= targets.kcal ? 'var(--accent-green)' : 'var(--accent-rose)'};">
           ${netKcal <= targets.kcal
             ? '✅ Dans les objectifs de la semaine !'
@@ -4504,7 +4507,8 @@ async function loadUserData(user) {
       document.getElementById('prof-height').value = appState.profile.height || '';
       document.getElementById('prof-age').value = appState.profile.age || '';
       document.getElementById('prof-gender').value = appState.profile.gender || 'male';
-      document.getElementById('prof-activity').value = appState.profile.activity || '1.55';
+      const actVal = Math.min(1.55, appState.profile.activity || 1.2);
+      document.getElementById('prof-activity').value = actVal;
       selectGoal(appState.profile.goal || 'maintenance');
       renderProfileResults(appState.profile);
     } catch(e) {}
